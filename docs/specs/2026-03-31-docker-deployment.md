@@ -48,7 +48,8 @@ services:
       - "8080:8080"
     environment:
       - CARD_HMAC_KEY=${CARD_HMAC_KEY:-default-secret-key-change-in-production}
-      - DB_PATH=/data/onecard.db
+      - DB_DRIVER=sqlite
+      - DB_DSN=/data/onecard.db
       - PORT=8080
       - LOG_LEVEL=info
     volumes:
@@ -56,7 +57,7 @@ services:
     networks:
       - onecard-net
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/api/stats"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -121,6 +122,10 @@ volumes:
 # HMAC密钥（生产环境请修改）
 CARD_HMAC_KEY=your-secret-key-here-please-change-in-production
 
+# 数据库配置
+DB_DRIVER=sqlite
+DB_DSN=/data/onecard.db
+
 # 可选：端口映射
 SERVER_PORT=8080
 ISSUER_PORT=3001
@@ -132,6 +137,10 @@ TERMINAL_PORT=3002
 ```bash
 # HMAC密钥（必填，生产环境请使用强密钥）
 CARD_HMAC_KEY=
+
+# 数据库配置
+DB_DRIVER=sqlite
+DB_DSN=/data/onecard.db
 
 # 可选配置
 SERVER_PORT=8080
@@ -313,35 +322,6 @@ docker-compose build --no-cache
 docker-compose up -d
 ```
 
-# 查看日志
-make logs
-```
-
-### 8.3 重新构建
-
-```bash
-# 修改代码后重新构建
-make rebuild
-```
-
----
-
-## 九、健康检查
-
-后端服务提供健康检查端点：
-
-```go
-// GET /health
-func HealthCheck(w http.ResponseWriter, r *http.Request) {
-    // 检查数据库连接
-    if err := db.DB.Ping(); err != nil {
-        w.WriteHeader(http.StatusServiceUnavailable)
-        return
-    }
-    w.WriteHeader(http.StatusOK)
-}
-```
-
 ---
 
 ## 八、健康检查
@@ -362,16 +342,38 @@ func HealthCheck(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## 九、数据备份
+## 九、水平扩展
 
-### 9.1 备份数据库
+### 9.1 扩展 terminal 实例
+
+```bash
+# 启动 10 个 terminal 实例模拟多个 POS 终端
+docker-compose up -d --scale terminal=10
+
+# 注意：多实例时需移除 container_name，并调整端口范围
+```
+
+### 9.2 压力测试场景
+
+```bash
+# 启动大量 terminal + 压测工具
+docker-compose up -d --scale terminal=20
+# 然后运行压测脚本
+go run ./scripts/stress-test/main.go --concurrency=50 --duration=60s
+```
+
+---
+
+## 十、数据备份
+
+### 10.1 备份数据库
 
 ```bash
 # 备份到当前目录
 docker cp onecard-server:/data/onecard.db ./backup_$(date +%Y%m%d_%H%M%S).db
 ```
 
-### 9.2 恢复数据库
+### 10.2 恢复数据库
 
 ```bash
 # 从备份恢复
@@ -381,15 +383,15 @@ docker-compose restart server
 
 ---
 
-## 十、故障排查
+## 十一、故障排查
 
-### 10.1 查看服务状态
+### 11.1 查看服务状态
 
 ```bash
 docker-compose ps
 ```
 
-### 10.2 查看特定服务日志
+### 11.2 查看特定服务日志
 
 ```bash
 # 后端服务
@@ -402,7 +404,7 @@ docker-compose logs issuer
 docker-compose logs terminal
 ```
 
-### 10.3 进入容器调试
+### 11.3 进入容器调试
 
 ```bash
 # 进入后端容器
@@ -417,13 +419,51 @@ docker exec -it onecard-terminal sh
 
 ---
 
-## 十一、生产环境注意事项
+## 十二、架构演进
+
+### 12.1 迁移 PostgreSQL
+
+修改 `.env`：
+```bash
+DB_DRIVER=postgres
+DB_DSN=host=onecard-db user=onecard password=xxx dbname=onecard sslmode=disable
+```
+
+添加 PostgreSQL 服务到 `docker-compose.yml`：
+```yaml
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: onecard
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: onecard
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - onecard-net
+
+volumes:
+  pgdata:
+```
+
+### 12.2 迁移 K8s（未来方向）
+
+- 使用 K8s Deployment + Service + HPA
+- 自动扩缩容策略：
+  - CPU > 70% 自动扩容
+  - 基于自定义指标（QPS）扩容
+- Ingress 配置外部访问
+
+---
+
+## 十三、生产环境注意事项
 
 | 事项 | 说明 |
 |------|------|
 | HMAC密钥 | 使用强密钥，通过环境变量或密钥管理系统注入 |
 | HTTPS | 生产环境建议启用 TLS |
 | 日志级别 | 生产环境设置为 `info` 或 `warn` |
-| 数据备份 | 定期备份 SQLite 数据库 |
+| 数据备份 | 定期备份数据库（SQLite 文件复制 / PG pg_dump） |
 | 资源限制 | 根据实际负载设置 CPU/内存限制 |
-| 高可用 | SQLite 不适合高并发，如需高可用考虑迁移到 PostgreSQL/MySQL |
+| 高可用 | 迁移 PG 后支持多实例部署 |
+| 自动扩缩 | K8s HPA 基于 CPU/QPS 自动扩缩容 |

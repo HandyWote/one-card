@@ -118,9 +118,20 @@ docker-compose logs -f
 # 重新构建（代码修改后）
 docker-compose up -d --build
 
+# 水平扩展消费终端（模拟多 POS 机）
+docker-compose up -d --scale terminal=10
+
 # 备份数据库
 docker cp onecard-server:/data/onecard.db ./backup.db
 ```
+
+## 架构演进
+
+| 阶段 | 数据库 | 部署 | 说明 |
+|------|--------|------|------|
+| 当前 | SQLite | Docker Compose | 开发和演示 |
+| 生产化 | PostgreSQL | Docker Compose | 高并发支持 |
+| 云原生 | PostgreSQL | Kubernetes | 自动扩缩容 |
 
 ## 项目结构
 
@@ -143,6 +154,16 @@ one-card-MS/
 - [发卡端实现方案](docs/specs/2026-03-31-issuer-implementation.md)
 - [消费终端实现方案](docs/specs/2026-03-31-terminal-implementation.md)
 - [Docker 部署方案](docs/specs/2026-03-31-docker-deployment.md)
+
+## 技术栈
+
+| 项目 | 选型 |
+|------|------|
+| 语言 | Go 1.23 |
+| 数据库 | SQLite（→ PostgreSQL） |
+| ORM | GORM |
+| 前端 | Vue/React |
+| 部署 | Docker Compose（→ K8s） |
 
 ## 许可证
 

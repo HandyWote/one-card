@@ -18,6 +18,8 @@
 | 数据库迁移 | GORM AutoMigrate |
 | 管理界面 | Vue/React |
 | HMAC密钥 | 环境变量 |
+| 数据库 | SQLite（GORM 抽象，可迁移 PostgreSQL） |
+| 服务设计 | 无状态，可水平扩展 |
 
 ---
 
@@ -31,7 +33,7 @@ server/
 │   ├── handler.go       # 请求处理函数（按领域分组）
 │   └── middleware.go    # 日志中间件
 ├── db/
-│   ├── db.go            # GORM初始化 + AutoMigrate
+│   ├── db.go            # GORM初始化 + AutoMigrate（支持多驱动）
 │   └── models.go        # Card/Transaction 结构体
 ├── service/
 │   ├── card.go          # 卡片业务逻辑
@@ -58,6 +60,7 @@ server/
 | GET | `/api/transactions` | 查询交易记录（可按card_id筛选） |
 | GET | `/api/transactions/all` | 所有交易（管理后台） |
 | GET | `/api/stats` | 统计数据 |
+| GET | `/health` | 健康检查 |
 | GET | `/` | 管理界面（SPA fallback） |
 
 ---
@@ -126,8 +129,9 @@ type Response struct {
 # HMAC签名密钥（必填）
 CARD_HMAC_KEY=your-secret-key-here
 
-# SQLite数据库路径
-DB_PATH=/data/onecard.db
+# 数据库配置（GORM 抽象层，便于迁移）
+DB_DRIVER=sqlite                    # sqlite | postgres
+DB_DSN=/data/onecard.db             # SQLite: 文件路径 | PostgreSQL: 连接串
 
 # 服务端口
 PORT=8080
@@ -283,24 +287,36 @@ WORKDIR /app
 COPY --from=builder /app/onecard-server .
 COPY --from=builder /app/server/static ./static
 
+RUN mkdir -p /data
+
 EXPOSE 8080
 CMD ["./onecard-server"]
 ```
 
-### 11.2 docker-compose.yml
+### 11.2 docker-compose.yml（server 部分）
 
 ```yaml
-services:
-  server:
-    build: .
+server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
     ports:
       - "8080:8080"
     environment:
       - CARD_HMAC_KEY=${CARD_HMAC_KEY}
-      - DB_PATH=/data/onecard.db
+      - DB_DRIVER=sqlite
+      - DB_DSN=/data/onecard.db
     volumes:
       - ./data:/data
-    network_mode: host
+    networks:
+      - onecard-net
+```
+
+### 11.3 水平扩展（迁移 PG 后）
+
+```bash
+# 迁移 PG 后，server 可水平扩展
+docker-compose up -d --scale server=3 --scale terminal=10
 ```
 
 ---

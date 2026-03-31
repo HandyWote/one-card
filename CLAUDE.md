@@ -38,6 +38,8 @@ issuer (port 3001) ──HTTP──► server (port 8080) ◀──HTTP── te
 3. **Terminal flow** — Input amount → "Start Charge" → Upload card file → Call server API → Auto-download updated card file
 4. **Docker networking** — Bridge network, services communicate via service names (`http://onecard-server:8080`)
 5. **Server serves admin UI** — Not a separate binary; Vue/React build is embedded with `go:embed`
+6. **Database abstraction** — GORM with `DB_DRIVER`/`DB_DSN` env vars; swap SQLite → PostgreSQL by changing config only
+7. **Stateless services** — terminal and issuer can scale horizontally: `docker-compose up -d --scale terminal=10`
 
 ---
 
@@ -100,7 +102,8 @@ GOOS=darwin GOARCH=amd64 go build -o bin/onecard-server-mac ./server
 |----------|---------|-------------|
 | `CARD_HMAC_KEY` | all | HMAC signing key (must be identical) |
 | `SERVER_URL` | issuer, terminal | Backend URL (`http://onecard-server:8080` in Docker) |
-| `DB_PATH` | server | SQLite database path (`./data/onecard.db`) |
+| `DB_DRIVER` | server | Database driver (`sqlite` / `postgres`) |
+| `DB_DSN` | server | Database connection string |
 | `PORT` | all | Service port (8080/3001/3002) |
 
 ---
@@ -119,6 +122,7 @@ GOOS=darwin GOARCH=amd64 go build -o bin/onecard-server-mac ./server
 | GET | `/api/transactions` | List transactions (optional `?card_id=xxx`) |
 | GET | `/api/transactions/all` | All transactions (admin) |
 | GET | `/api/stats` | Statistics (admin) |
+| GET | `/health` | Health check |
 
 ---
 

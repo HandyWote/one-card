@@ -16,6 +16,7 @@
 | 金额输入 | 数字键盘 |
 | 端口 | 可配置（默认3002） |
 | HMAC密钥 | 环境变量（与server一致） |
+| 服务设计 | 无状态，可水平扩展（`--scale terminal=N`） |
 
 ---
 
@@ -359,7 +360,18 @@ services:
       - PORT=3002
     depends_on:
       - server
-    network_mode: host
+    networks:
+      - onecard-net
+```
+
+### 10.3 水平扩展
+
+```bash
+# 启动多个终端实例模拟多台POS机
+docker-compose up -d --scale terminal=10
+
+# 注意：多实例时需移除 container_name，端口映射需改为范围
+# ports: - "3002-3011:3002"
 ```
 
 ---

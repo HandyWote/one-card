@@ -15,6 +15,7 @@
 | HMAC密钥 | 环境变量（与server一致） |
 | 浏览器 | 启动时自动打开 |
 | 端口 | 可配置（默认3001） |
+| 服务设计 | 无状态，可水平扩展 |
 
 ---
 
@@ -285,7 +286,8 @@ services:
       - PORT=3001
     depends_on:
       - server
-    network_mode: host
+    networks:
+      - onecard-net
 ```
 
 ---
