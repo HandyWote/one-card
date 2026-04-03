@@ -1,169 +1,117 @@
-# 一卡通模拟消费终端系统
+# 校园一卡通模拟消费终端系统
 
-一个基于 Go 的校园一卡通模拟系统，包含发卡、消费、管理三个独立组件，使用 Docker Compose 一键部署。
----
-该项目属于汕头大学一级项目 采用MIT协议
+一个基于 python + tkinter 的校园一卡通模拟系统，包含消费终端和充值发卡站两个独立程序，使用 SQLite 数据库保证数据一致性。
+
+> 该项目属于汕头大学一级项目，采用 MIT 协议
+
 ---
 
 ## 系统架构
 
-```mermaid
-flowchart LR
-    issuer[发卡端<br/>issuer :3001] -->|HTTP| server[后端服务<br/>server :8080]
-    terminal[消费终端<br/>terminal :3002] -->|HTTP| server
-    server --> db[(SQLite)]
-    server --> admin[管理界面<br/>embedded]
-
-    style issuer fill:#e1f5ff
-    style terminal fill:#e1f5ff
-    style server fill:#ffe1e1
-    style db fill:#e1ffe1
-    style admin fill:#fff4e1
+```
+issuer.py（充值发卡站）──► SQLite 数据库 ◄── terminal.py（消费终端）
+                               │
+                      data/cards/*（卡片文件，文件名即卡号，无后缀）
 ```
 
 ### 核心组件
 
-| 组件 | 端口 | 功能 |
+| 组件 | 文件 | 功能 |
 |------|------|------|
-| **server** | 8080 | HTTP API + SQLite + 管理界面 |
-| **issuer** | 3001 | 发卡、充值 |
-| **terminal** | 3002 | POS 风格消费终端 |
+| **消费终端** | `terminal.py` | POS 风格刷卡消费，支持多件商品金额运算 |
+| **充值发卡站** | `issuer.py` | 新卡发行、圈存充值 |
 
 ### 技术栈
 
-- **Go 1.23** — 跨平台，编译为单二进制
-- **SQLite** — 轻量级数据库
-- **Vue/React** — 前端界面（`go:embed` 内嵌）
-- **Docker Compose** — 容器编排
+- **Python 3.x** — 编程语言
+- **tkinter** — GUI 框架（标准库，无需额外安装）
+- **SQLite** — 轻量级数据库，存储卡片和交易数据
+- **unittest** — 单元测试框架
+
+---
 
 ## 快速开始
 
 ### 前置要求
 
-- Docker
-- Docker Compose
+- Python 3.x
+- uv（Python 包管理器，可选）
 
-### 启动服务
+### 运行程序
 
 ```bash
-# 1. 克隆项目
-git clone <repo-url>
-cd one-card-MS
+# 运行消费终端
+uv run terminal.py
 
-# 2. 配置环境变量
-cp .env.example .env
-# 编辑 .env，设置 CARD_HMAC_KEY
+# 运行充值发卡站
+uv run issuer.py
 
-# 3. 启动所有服务
-docker-compose up -d
-
-# 4. 查看日志
-docker-compose logs -f
+# 运行单元测试
+uv run -m pytest tests/
 ```
 
-### 访问服务
-
-| 服务 | 地址 |
-|------|------|
-| 管理界面 | http://localhost:8080 |
-| 发卡端 | http://localhost:3001 |
-| 消费终端 | http://localhost:3002 |
+---
 
 ## 使用流程
 
 ### 1. 发卡
 
-访问发卡端 → 输入卡号、姓名、初始金额 → 生成卡片文件（JSON）→ 保存到本地
+运行 `issuer.py` → 切换到「发卡」选项卡 → 输入卡号、姓名、初始金额 → 点击「生成卡片」→ 自动创建卡片文件（文件名即卡号）
 
 ### 2. 消费
 
-访问消费终端 → 输入金额 → 点击"开始扣费" → 上传卡片文件 → 自动扣款 → 下载更新后的卡片
+运行 `terminal.py` → 通过按键区输入/计算金额 → 点击「确定」→ 拖拽卡片文件到窗口 → 自动扣款并显示结果
 
 ### 3. 充值
 
-访问发卡端 → 选择充值功能 → 输入卡号和金额 → 完成充值
+运行 `issuer.py` → 切换到「充值」选项卡 → 输入充值金额 → 拖拽卡片文件到窗口 → 自动完成圈存充值
 
-### 4. 管理
-
-访问管理界面 → 查看所有卡片、交易记录、统计数据
+---
 
 ## 卡片文件格式
+
+卡片文件名即卡号（如 `2024001`，无后缀），内容为 JSON 格式：
 
 ```json
 {
   "card_id": "2024001",
   "name": "张三",
-  "balance": 500.00,
+  "balance": 85.50,
   "status": "active",
-  "expires_at": "2027-06-30T23:59:59Z",
-  "transactions": [],
-  "hmac": "sha256_signature"
+  "created_at": "2026-04-01"
 }
 ```
 
-使用 HMAC-SHA256 签名防篡改。
+文件是卡片的导入/导出格式，真实数据存储在 SQLite 数据库中。
 
-## 常用命令
-
-```bash
-# 启动服务
-docker-compose up -d
-
-# 停止服务
-docker-compose down
-
-# 查看日志
-docker-compose logs -f
-
-# 重新构建（代码修改后）
-docker-compose up -d --build
-
-# 水平扩展消费终端（模拟多 POS 机）
-docker-compose up -d --scale terminal=10
-
-# 备份数据库
-docker cp onecard-server:/data/onecard.db ./backup.db
-```
-
-## 架构演进
-
-| 阶段 | 数据库 | 部署 | 说明 |
-|------|--------|------|------|
-| 当前 | SQLite | Docker Compose | 开发和演示 |
-| 生产化 | PostgreSQL | Docker Compose | 高并发支持 |
-| 云原生 | PostgreSQL | Kubernetes | 自动扩缩容 |
+---
 
 ## 项目结构
 
 ```
-one-card-MS/
-├── server/          # 后端服务
-├── issuer/          # 发卡端
-├── terminal/        # 消费终端
-├── docker-compose.yml
-├── .env.example
-└── docs/            # 详细设计文档
+one-card/
+├── terminal.py          # 消费终端主程序
+├── issuer.py            # 充值发卡站主程序
+├── card_manager.py      # 卡片管理模块
+├── calculator.py        # 辅助运算模块
+├── logger.py            # 交易记录模块
+├── database.py          # 数据库管理模块
+├── data/
+│   ├── onecard.db       # SQLite 数据库
+│   └── cards/           # 卡片文件（文件名即卡号）
+├── tests/               # 单元测试
+└── docs/                # 设计文档
 ```
+
+---
 
 ## 文档
 
 详细设计文档请查看 [docs/specs/](docs/specs/)：
 
-- [总体设计](docs/specs/2026-03-31-design.md)
-- [后端实现方案](docs/specs/2026-03-31-server-implementation.md)
-- [发卡端实现方案](docs/specs/2026-03-31-issuer-implementation.md)
-- [消费终端实现方案](docs/specs/2026-03-31-terminal-implementation.md)
-- [Docker 部署方案](docs/specs/2026-03-31-docker-deployment.md)
+- [系统设计文档](docs/specs/2026-04-03-design.md) — 完整的系统设计、模块说明和结算方案
 
-## 技术栈
-
-| 项目 | 选型 |
-|------|------|
-| 语言 | Go 1.23 |
-| 数据库 | SQLite（→ PostgreSQL） |
-| ORM | GORM |
-| 前端 | Vue/React |
-| 部署 | Docker Compose（→ K8s） |
+---
 
 ## 许可证
 
