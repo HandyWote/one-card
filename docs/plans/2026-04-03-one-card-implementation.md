@@ -359,18 +359,23 @@ class Logger:
 
     def get_transactions(self, card_id: str = None) -> list[dict]:
         conn = self.db.get_connection()
-        if card_id:
-            rows = conn.execute(
-                "SELECT tx_id, card_id, type, amount, balance_after, merchant, time "
-                "FROM transactions WHERE card_id = ? ORDER BY time",
-                (card_id,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT tx_id, card_id, type, amount, balance_after, merchant, time "
-                "FROM transactions ORDER BY time"
-            ).fetchall()
-        return [dict(r) for r in rows]
+        original_factory = conn.row_factory
+        conn.row_factory = sqlite3.Row
+        try:
+            if card_id:
+                rows = conn.execute(
+                    "SELECT tx_id, card_id, type, amount, balance_after, merchant, time "
+                    "FROM transactions WHERE card_id = ? ORDER BY time",
+                    (card_id,)
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT tx_id, card_id, type, amount, balance_after, merchant, time "
+                    "FROM transactions ORDER BY time"
+                ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.row_factory = original_factory
 
     def get_merchant_summary(self, merchant: str) -> dict:
         conn = self.db.get_connection()
