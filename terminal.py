@@ -113,6 +113,7 @@ class TerminalApp:
             self.display_var.set(display)
 
     def _on_backspace(self):
+        self._cancel_clear()
         if self.state == STATE_INPUT:
             display = self.calculator.backspace()
             self.display_var.set(display)
@@ -125,6 +126,7 @@ class TerminalApp:
         self.state = STATE_INPUT
 
     def _on_confirm(self):
+        self._cancel_clear()
         if self.state == STATE_RESULT:
             self.result_var.set('')
             self.calculator.clear()
@@ -198,6 +200,7 @@ class TerminalApp:
             self.state = STATE_RESULT
 
     def cleanup(self):
+        self._cancel_clear()
         self.db.close()
 
 
