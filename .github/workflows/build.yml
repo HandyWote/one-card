@@ -54,25 +54,24 @@ jobs:
       - name: Assemble package (Linux)
         if: matrix.platform == 'linux'
         run: |
-          echo "=== dist contents ==="
-          find dist -maxdepth 2 -type f -name 'terminal*' -o -name 'issuer*' | head -20
-          mkdir -p pkg/data
-          cp dist/terminal.dist/terminal* pkg/terminal
-          cp dist/issuer.dist/issuer* pkg/issuer
+          # 以 terminal.dist 为基础（含完整 Python 运行时 + DLL）
+          # 再把 issuer 二进制合并进去，共享同一套运行时
+          cp -r dist/terminal.dist pkg
+          cp dist/issuer.dist/issuer pkg/
           chmod +x pkg/terminal pkg/issuer
+          mkdir -p pkg/data
           cp -r data/cards pkg/data/
           cd pkg && tar czf ../one-card-linux-x86_64.tar.gz .
 
       - name: Assemble package (Windows)
         if: matrix.platform == 'windows'
+        shell: pwsh
         run: |
-          dir dist\terminal.dist\terminal*
-          dir dist\issuer.dist\issuer*
-          mkdir pkg\data\cards
-          copy dist\terminal.dist\terminal.exe pkg\
-          copy dist\issuer.dist\issuer.exe pkg\
-          xcopy /E /I data\cards pkg\data\cards
-          cd pkg && 7z a ..\one-card-windows-x86_64.zip .
+          Copy-Item -Recurse dist\terminal.dist pkg
+          Copy-Item dist\issuer.dist\issuer.exe pkg\
+          New-Item -ItemType Directory -Force -Path pkg\data\cards | Out-Null
+          Copy-Item -Recurse data\cards\* pkg\data\cards\
+          cd pkg; 7z a ..\one-card-windows-x86_64.zip .
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -97,7 +96,7 @@ jobs:
       - name: Generate tag and release notes
         id: release
         run: |
-          TAG=$(date +%Y-%m-%d)
+          TAG=$(date +%Y-%m-%d_%H%M%S)
           PREV_TAG=$(git tag --sort=-creatordate | head -1)
           if [ -z "$PREV_TAG" ]; then
             NOTES=$(git log --pretty=format:"- %s (%h)" HEAD)
