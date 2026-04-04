@@ -44,7 +44,7 @@ class IssuerApp:
             from tkinterdnd2 import DND_FILES
             self.recharge_frame.drop_target_register(DND_FILES)
             self.recharge_frame.dnd_bind('<<Drop>>', self._on_recharge_drop)
-        except ImportError:
+        except Exception:
             pass
 
     def _build_ui(self):

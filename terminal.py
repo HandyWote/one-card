@@ -50,8 +50,7 @@ class TerminalApp:
             from tkinterdnd2 import DND_FILES
             self.root.drop_target_register(DND_FILES)
             self.root.dnd_bind('<<Drop>>', self._on_drop)
-        except ImportError:
-            # 创建"选择卡片"按钮作为替代
+        except Exception:
             pass
 
     def _build_ui(self):
