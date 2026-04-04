@@ -26,6 +26,7 @@ class TerminalApp:
         self.state = STATE_INPUT
         self.calculator = Calculator()
         self.amount = 0.0
+        self._clear_timer_id = None
 
         # 初始化数据库和模块
         self.db = Database(DB_PATH)
@@ -92,6 +93,7 @@ class TerminalApp:
                   ).grid(row=4, column=2, columnspan=2, padx=2, pady=2)
 
     def _on_digit(self, digit):
+        self._cancel_clear()
         if self.state == STATE_RESULT:
             self.result_var.set('')
             self.calculator.clear()
@@ -101,6 +103,7 @@ class TerminalApp:
             self.display_var.set(display)
 
     def _on_operator(self, op):
+        self._cancel_clear()
         if self.state == STATE_RESULT:
             self.result_var.set('')
             self.calculator.clear()
@@ -115,6 +118,7 @@ class TerminalApp:
             self.display_var.set(display)
 
     def _on_clear(self):
+        self._cancel_clear()
         self.calculator.clear()
         self.display_var.set('')
         self.result_var.set('')
@@ -134,6 +138,22 @@ class TerminalApp:
             return
         self.display_var.set(f'¥ {self.amount:.2f}  请刷卡')
         self.state = STATE_WAITING
+
+    def _schedule_clear(self):
+        self._cancel_clear()
+        self._clear_timer_id = self.root.after(3000, self._do_clear)
+
+    def _cancel_clear(self):
+        if self._clear_timer_id is not None:
+            self.root.after_cancel(self._clear_timer_id)
+            self._clear_timer_id = None
+
+    def _do_clear(self):
+        self.display_var.set('')
+        self.result_var.set('')
+        self.calculator.clear()
+        self.state = STATE_INPUT
+        self._clear_timer_id = None
 
     def _on_drop(self, event):
         if self.state != STATE_WAITING:
@@ -164,10 +184,12 @@ class TerminalApp:
                     card['balance'], MERCHANT
                 )
                 self.card_mgr.export_card(card_id, CARDS_DIR)
+                self.display_var.set(f'¥ {card["balance"]:.2f} 元')
                 self.result_var.set(
                     f"扣款成功，{card['name']}，扣款 ¥{self.amount:.2f} 元，"
                     f"余额 ¥{card['balance']:.2f} 元"
                 )
+                self._schedule_clear()
             else:
                 self.result_var.set(f"扣款失败：{msg}")
             self.state = STATE_RESULT
