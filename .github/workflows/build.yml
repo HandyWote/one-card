@@ -8,15 +8,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            platform: linux
-          - os: windows-latest
-            platform: windows
-
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
@@ -28,19 +20,9 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install system deps (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-tk python3-dev
-
-      - name: Install system deps (Windows)
-        if: matrix.platform == 'windows'
+      - name: Install deps
         run: |
           pip install tkinterdnd2 || true
-
-      - name: Install Python deps
-        run: |
           pip install nuitka ordered-set
 
       - name: Build terminal.py
@@ -51,24 +33,12 @@ jobs:
         run: |
           python -m nuitka --standalone --enable-plugin=tk-inter --assume-yes-for-downloads --output-dir=dist issuer.py
 
-      - name: Assemble package (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          # 以 terminal.dist 为基础（含完整 Python 运行时 + DLL）
-          # 再把 issuer 二进制合并进去，共享同一套运行时
-          cp -r dist/terminal.dist pkg
-          cp dist/issuer.dist/issuer pkg/
-          chmod +x pkg/terminal pkg/issuer
-          mkdir -p pkg/data
-          cp -r data/cards pkg/data/
-          cd pkg && tar czf ../one-card-linux-x86_64.tar.gz .
-
-      - name: Assemble package (Windows)
-        if: matrix.platform == 'windows'
+      - name: Assemble package
         shell: pwsh
         run: |
+          # 以 terminal.dist 为基础（含 Python 运行时），把 issuer.exe 合并进去
           Copy-Item -Recurse dist\terminal.dist pkg
-          Copy-Item dist\issuer.dist\issuer.exe pkg\
+          Copy-Item dist\issuer.dist\issuer.exe pkg\issuer.exe
           New-Item -ItemType Directory -Force -Path pkg\data\cards | Out-Null
           Copy-Item -Recurse data\cards\* pkg\data\cards\
           cd pkg; 7z a ..\one-card-windows-x86_64.zip .
@@ -76,8 +46,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: binaries-${{ matrix.platform }}
-          path: one-card-${{ matrix.platform }}-x86_64.*
+          name: binaries-windows
+          path: one-card-windows-x86_64.zip
 
   release:
     needs: build
@@ -88,7 +58,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download all artifacts
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -115,5 +85,4 @@ jobs:
           name: ${{ steps.release.outputs.tag }}
           body: ${{ steps.release.outputs.notes }}
           files: |
-            artifacts/binaries-linux/*
             artifacts/binaries-windows/*
