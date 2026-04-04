@@ -45,11 +45,11 @@ jobs:
 
       - name: Build terminal.py
         run: |
-          python -m nuitka --standalone --output-dir=dist terminal.py
+          python -m nuitka --standalone --enable-plugin=tk-inter --assume-yes-for-downloads --output-dir=dist terminal.py
 
       - name: Build issuer.py
         run: |
-          python -m nuitka --standalone --output-dir=dist issuer.py
+          python -m nuitka --standalone --enable-plugin=tk-inter --assume-yes-for-downloads --output-dir=dist issuer.py
 
       - name: Assemble package (Linux)
         if: matrix.platform == 'linux'
