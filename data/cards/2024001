@@ -1,0 +1,7 @@
+{
+  "card_id": "2024001",
+  "name": "张三",
+  "balance": 100.0,
+  "status": "active",
+  "created_at": "2026-04-01"
+}

@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog
+from tkinter import ttk, filedialog, font as tkfont
 
 from database import Database
 from card_manager import CardManager
@@ -14,11 +14,21 @@ STATE_WAITING = 'waiting'
 STATE_RESULT = 'result'
 
 
+def _get_font_family(root):
+    families = set(tkfont.families(root))
+    for candidate in ['Noto Sans CJK SC', 'WenQuanYi Micro Hei',
+                       'Microsoft YaHei', 'PingFang SC', 'Arial']:
+        if candidate in families:
+            return candidate
+    return 'TkDefaultFont'
+
+
 class IssuerApp:
     def __init__(self, root):
         self.root = root
         self.root.title("校园一卡通 — 充值发卡站")
         self.root.resizable(False, False)
+        self.font_family = _get_font_family(root)
 
         self.recharge_state = STATE_INPUT
         self.recharge_amount = 0.0
@@ -34,7 +44,7 @@ class IssuerApp:
             from tkinterdnd2 import DND_FILES
             self.recharge_frame.drop_target_register(DND_FILES)
             self.recharge_frame.dnd_bind('<<Drop>>', self._on_recharge_drop)
-        except ImportError:
+        except Exception:
             pass
 
     def _build_ui(self):
@@ -63,7 +73,7 @@ class IssuerApp:
 
         self.create_status = tk.StringVar(value='')
         ttk.Label(create_frame, textvariable=self.create_status,
-                  font=('Arial', 11), wraplength=280).grid(
+                  font=(self.font_family, 11), wraplength=280).grid(
             row=4, column=0, columnspan=2)
 
         # === 充值选项卡 ===
@@ -88,7 +98,7 @@ class IssuerApp:
 
         self.recharge_status = tk.StringVar(value='')
         ttk.Label(self.recharge_frame, textvariable=self.recharge_status,
-                  font=('Arial', 11), wraplength=280).grid(
+                  font=(self.font_family, 11), wraplength=280).grid(
             row=4, column=0, columnspan=2, pady=10)
 
     def _on_create_card(self):

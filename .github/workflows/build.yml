@@ -1,0 +1,88 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: |
+          pip install tkinterdnd2 || true
+          pip install nuitka ordered-set
+
+      - name: Build terminal.py
+        run: |
+          python -m nuitka --standalone --enable-plugin=tk-inter --disable-console --assume-yes-for-downloads --output-dir=dist terminal.py
+
+      - name: Build issuer.py
+        run: |
+          python -m nuitka --standalone --enable-plugin=tk-inter --disable-console --assume-yes-for-downloads --output-dir=dist issuer.py
+
+      - name: Assemble package
+        shell: pwsh
+        run: |
+          # 以 terminal.dist 为基础（含 Python 运行时），把 issuer.exe 合并进去
+          Copy-Item -Recurse dist\terminal.dist pkg
+          Copy-Item dist\issuer.dist\issuer.exe pkg\issuer.exe
+          New-Item -ItemType Directory -Force -Path pkg\data\cards | Out-Null
+          Copy-Item -Recurse data\cards\* pkg\data\cards\
+          cd pkg; 7z a ..\one-card-windows-x86_64.zip .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-windows
+          path: one-card-windows-x86_64.zip
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate tag and release notes
+        id: release
+        run: |
+          TAG=$(date +%Y-%m-%d_%H%M%S)
+          PREV_TAG=$(git tag --sort=-creatordate | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            NOTES=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            NOTES=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD")
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.tag }}
+          body: ${{ steps.release.outputs.notes }}
+          files: |
+            artifacts/binaries-windows/*

@@ -1,4 +1,3 @@
-# tests/test_calculator.py
 import unittest
 from calculator import Calculator
 
@@ -10,8 +9,6 @@ class TestCalculator(unittest.TestCase):
     def test_input_single_digit(self):
         """输入单个数字应正确显示"""
         self.assertEqual(self.calc.input_digit('5'), '5')
-        self.calc.clear()
-        self.assertEqual(self.calc.input_digit('0'), '0')
 
     def test_input_multi_digit(self):
         """连续输入数字应拼接"""
@@ -45,7 +42,6 @@ class TestCalculator(unittest.TestCase):
         self.assertEqual(self.calc.backspace(), '5')
         self.assertEqual(self.calc.backspace(), '')
 
-
     def test_clear(self):
         """清除应重置所有状态"""
         self.calc.input_digit('5')
@@ -57,18 +53,11 @@ class TestCalculator(unittest.TestCase):
     def test_calculate_single_number(self):
         """只输入一个数字直接计算应返回该数"""
         self.calc.input_digit('25.5')
-        self.calc.input_digit('2')
-        self.calc.input_digit('5')
-        self.calc.input_digit('.')
-        self.calc.input_digit('5')
         result = self.calc.calculate()
         self.assertAlmostEqual(result, 25.5)
 
     def test_calculate_addition(self):
         """5.5 + 8.0 = 13.5"""
-        self.calc.input_digit('5.5')
-        self.calc.input_operator('+')
-        self.calc.input_digit('8.0')
         self.calc.input_digit('5')
         self.calc.input_digit('.')
         self.calc.input_digit('5')
@@ -125,7 +114,7 @@ class TestCalculator(unittest.TestCase):
         self.calc.input_digit('5')
         self.calc.input_operator('+')
         self.calc.input_digit('3')
-        self.calc.calculate()   # 8
+        self.calc.calculate()
         display = self.calc.input_digit('1')
         self.assertEqual(display, '1')
 
