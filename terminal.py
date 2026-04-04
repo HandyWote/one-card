@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import font as tkfont
 from tkinter import filedialog
 import json
+import codecs
 
 from database import Database
 from card_manager import CardManager
@@ -184,11 +185,12 @@ class TerminalApp:
 
     def _process_card(self, filepath):
         try:
-            card_id = self._read_card_id(filepath)
-            if not card_id:
+            card_data, source_encoding = self._import_card_compatible(filepath)
+            if card_data is None:
                 self.result_var.set('卡片文件无效')
                 self._set_state(STATE_RESULT)
                 return
+            card_id = card_data['card_id']
             card = self.card_mgr.load_card(card_id)
             if card is None:
                 self.result_var.set('卡片不存在')
@@ -203,7 +205,7 @@ class TerminalApp:
                     card_id, 'consume', self.amount,
                     card['balance'], MERCHANT
                 )
-                self.card_mgr.export_card(card_id, CARDS_DIR)
+                self._sync_card_file(filepath, card_id, source_encoding)
                 self.display_var.set(f'¥ {card["balance"]:.2f} 元')
                 self.result_var.set(
                     f"扣款成功，{card['name']}，扣款 ¥{self.amount:.2f} 元，"
@@ -216,18 +218,63 @@ class TerminalApp:
             self.result_var.set(f'错误：{e}')
             self._set_state(STATE_RESULT)
 
-    def _read_card_id(self, filepath):
-        # 兼容 UTF-8 与中文 Windows 常见编码，且仅信任 card_id
-        for encoding in ('utf-8-sig', 'gb18030'):
+    def _import_card_compatible(self, filepath):
+        card_data, source_encoding = self._read_card_file_compatible(filepath)
+        if card_data is None:
+            return None, None
+        name = card_data.get('name')
+        if isinstance(name, str):
+            card_data['name'] = self._fix_mojibake_name(name)
+        self.card_mgr.save_card(card_data)
+        return self.card_mgr.load_card(card_data['card_id']), source_encoding
+
+    def _read_card_file_compatible(self, filepath):
+        # 兼容 utf-8 / utf-8-sig / gb18030，并返回原始编码以便回写保持一致
+        try:
+            with open(filepath, 'rb') as f:
+                raw = f.read()
+        except OSError:
+            return None, None
+
+        candidates = []
+        if raw.startswith(codecs.BOM_UTF8):
+            candidates.append('utf-8-sig')
+        else:
+            candidates.append('utf-8')
+        candidates.append('gb18030')
+
+        for encoding in candidates:
             try:
-                with open(filepath, 'r', encoding=encoding) as f:
-                    card_data = json.load(f)
-                card_id = card_data.get('card_id')
-                if isinstance(card_id, str):
-                    return card_id.strip()
-            except (UnicodeDecodeError, json.JSONDecodeError, OSError):
+                text = raw.decode(encoding)
+                card_data = json.loads(text)
+                if not isinstance(card_data, dict):
+                    return None, None
+                required = ('card_id', 'name', 'balance', 'status', 'created_at')
+                if not all(k in card_data for k in required):
+                    return None, None
+                return card_data, encoding
+            except (UnicodeDecodeError, json.JSONDecodeError):
                 continue
-        return None
+        return None, None
+
+    def _fix_mojibake_name(self, name):
+        # 例：'寮犱笁' -> '张三'
+        for wrong_enc in ('gbk', 'latin1'):
+            try:
+                fixed = name.encode(wrong_enc).decode('utf-8')
+                if fixed:
+                    return fixed
+            except UnicodeError:
+                continue
+        return name
+
+    def _sync_card_file(self, filepath, card_id, source_encoding):
+        card = self.card_mgr.load_card(card_id)
+        if card is None:
+            return
+        encoding = source_encoding or 'utf-8'
+        with open(filepath, 'w', encoding=encoding) as f:
+            json.dump(card, f, ensure_ascii=False, indent=2)
 
     def cleanup(self):
         self.db.close()
