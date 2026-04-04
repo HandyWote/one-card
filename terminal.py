@@ -1,6 +1,6 @@
 # terminal.py
 import tkinter as tk
-from tkinter import font as tkfont
+from tkinter import font as tkfont, filedialog
 import os
 
 from database import Database
@@ -91,6 +91,12 @@ class TerminalApp:
                   command=self._on_confirm
                   ).grid(row=4, column=2, columnspan=2, padx=2, pady=2)
 
+        # 选择卡片按钮（拖放的替代/补充）
+        tk.Button(self.root, text='选择卡片', width=30, height=1,
+                  font=('Arial', 11),
+                  command=self._on_select_card
+                  ).pack(pady=(0, 10))
+
     def _on_digit(self, digit):
         if self.state == STATE_RESULT:
             self.result_var.set('')
@@ -134,6 +140,17 @@ class TerminalApp:
             return
         self.display_var.set(f'¥ {self.amount:.2f}  请刷卡')
         self.state = STATE_WAITING
+
+    def _on_select_card(self):
+        if self.state != STATE_WAITING:
+            self.result_var.set('请先输入金额并点击"确定"')
+            return
+        filepath = filedialog.askopenfilename(
+            title='选择卡片文件',
+            initialdir=CARDS_DIR
+        )
+        if filepath:
+            self._process_card(filepath)
 
     def _on_drop(self, event):
         if self.state != STATE_WAITING:
