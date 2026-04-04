@@ -54,15 +54,20 @@ jobs:
       - name: Assemble package (Linux)
         if: matrix.platform == 'linux'
         run: |
+          echo "=== dist contents ==="
+          find dist -maxdepth 2 -type f -name 'terminal*' -o -name 'issuer*' | head -20
           mkdir -p pkg/data
-          cp dist/terminal.dist/terminal pkg/
-          cp dist/issuer.dist/issuer pkg/
+          cp dist/terminal.dist/terminal* pkg/terminal
+          cp dist/issuer.dist/issuer* pkg/issuer
+          chmod +x pkg/terminal pkg/issuer
           cp -r data/cards pkg/data/
           cd pkg && tar czf ../one-card-linux-x86_64.tar.gz .
 
       - name: Assemble package (Windows)
         if: matrix.platform == 'windows'
         run: |
+          dir dist\terminal.dist\terminal*
+          dir dist\issuer.dist\issuer*
           mkdir pkg\data\cards
           copy dist\terminal.dist\terminal.exe pkg\
           copy dist\issuer.dist\issuer.exe pkg\
