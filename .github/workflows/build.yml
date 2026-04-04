@@ -1,0 +1,115 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install system deps (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-dev
+
+      - name: Install system deps (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          pip install tkinterdnd2 || true
+
+      - name: Install Python deps
+        run: |
+          pip install nuitka ordered-set
+
+      - name: Build terminal.py
+        run: |
+          python -m nuitka --standalone --enable-plugin=tk-inter --assume-yes-for-downloads --output-dir=dist terminal.py
+
+      - name: Build issuer.py
+        run: |
+          python -m nuitka --standalone --enable-plugin=tk-inter --assume-yes-for-downloads --output-dir=dist issuer.py
+
+      - name: Assemble package (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p pkg/data
+          cp dist/terminal.dist/terminal pkg/
+          cp dist/issuer.dist/issuer pkg/
+          cp -r data/cards pkg/data/
+          cd pkg && tar czf ../one-card-linux-x86_64.tar.gz .
+
+      - name: Assemble package (Windows)
+        if: matrix.platform == 'windows'
+        run: |
+          mkdir pkg\data\cards
+          copy dist\terminal.dist\terminal.exe pkg\
+          copy dist\issuer.dist\issuer.exe pkg\
+          xcopy /E /I data\cards pkg\data\cards
+          cd pkg && 7z a ..\one-card-windows-x86_64.zip .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.platform }}
+          path: one-card-${{ matrix.platform }}-x86_64.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate tag and release notes
+        id: release
+        run: |
+          TAG=$(date +%Y-%m-%d)
+          PREV_TAG=$(git tag --sort=-creatordate | head -1)
+          if [ -z "$PREV_TAG" ]; then
+            NOTES=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            NOTES=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD")
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "notes<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NOTES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.tag }}
+          body: ${{ steps.release.outputs.notes }}
+          files: |
+            artifacts/binaries-linux/*
+            artifacts/binaries-windows/*
