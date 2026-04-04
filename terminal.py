@@ -17,11 +17,21 @@ STATE_WAITING = 'waiting'
 STATE_RESULT = 'result'
 
 
+def _get_font_family(root):
+    families = set(tkfont.families(root))
+    for candidate in ['Noto Sans CJK SC', 'WenQuanYi Micro Hei',
+                       'Microsoft YaHei', 'PingFang SC', 'Arial']:
+        if candidate in families:
+            return candidate
+    return 'TkDefaultFont'
+
+
 class TerminalApp:
     def __init__(self, root):
         self.root = root
         self.root.title("校园一卡通 — 消费终端")
         self.root.resizable(False, False)
+        self.font_family = _get_font_family(root)
 
         self.state = STATE_INPUT
         self.calculator = Calculator()
@@ -47,7 +57,7 @@ class TerminalApp:
     def _build_ui(self):
         # 显示区
         self.display_var = tk.StringVar(value='')
-        display_font = tkfont.Font(size=28, weight='bold')
+        display_font = tkfont.Font(family=self.font_family, size=28, weight='bold')
         tk.Label(self.root, textvariable=self.display_var,
                  font=display_font, anchor='e', padx=20, pady=15,
                  relief='sunken', width=16).pack(fill='x', padx=10, pady=(10, 5))
@@ -55,7 +65,7 @@ class TerminalApp:
         # 结果区
         self.result_var = tk.StringVar(value='')
         tk.Label(self.root, textvariable=self.result_var,
-                 font=('Arial', 12), fg='green', anchor='w', padx=10,
+                 font=(self.font_family, 12), fg='green', anchor='w', padx=10,
                  wraplength=280, height=2).pack(fill='x', padx=10)
 
         # 按键区
@@ -71,7 +81,7 @@ class TerminalApp:
 
         for text, row, col in buttons:
             btn = tk.Button(keypad, text=text, width=6, height=2,
-                            font=('Arial', 14))
+                            font=(self.font_family, 14))
             btn.grid(row=row, column=col, padx=2, pady=2)
             if text in '0123456789.':
                 btn.config(command=lambda t=text: self._on_digit(t))
@@ -84,16 +94,16 @@ class TerminalApp:
 
         # 底部两行
         tk.Button(keypad, text='清除', width=14, height=2,
-                  font=('Arial', 14), command=self._on_clear
+                  font=(self.font_family, 14), command=self._on_clear
                   ).grid(row=4, column=0, columnspan=2, padx=2, pady=2)
         tk.Button(keypad, text='确定', width=14, height=2,
-                  font=('Arial', 14, 'bold'),
+                  font=(self.font_family, 14, 'bold'),
                   command=self._on_confirm
                   ).grid(row=4, column=2, columnspan=2, padx=2, pady=2)
 
         # 选择卡片按钮（拖放的替代/补充）
         tk.Button(self.root, text='选择卡片', width=30, height=1,
-                  font=('Arial', 11),
+                  font=(self.font_family, 11),
                   command=self._on_select_card
                   ).pack(pady=(0, 10))
 
