@@ -58,17 +58,24 @@ class TestCalculator(unittest.TestCase):
 
     def test_calculate_addition(self):
         """5.5 + 8.0 = 13.5"""
-        self.calc.input_digit('5.5')
+        self.calc.input_digit('5')
+        self.calc.input_digit('.')
+        self.calc.input_digit('5')
         self.calc.input_operator('+')
-        self.calc.input_digit('8.0')
+        self.calc.input_digit('8')
+        self.calc.input_digit('.')
+        self.calc.input_digit('0')
         result = self.calc.calculate()
         self.assertAlmostEqual(result, 13.5)
 
     def test_calculate_subtraction(self):
         """20 - 7.5 = 12.5"""
-        self.calc.input_digit('20')
+        self.calc.input_digit('2')
+        self.calc.input_digit('0')
         self.calc.input_operator('-')
-        self.calc.input_digit('7.5')
+        self.calc.input_digit('7')
+        self.calc.input_digit('.')
+        self.calc.input_digit('5')
         result = self.calc.calculate()
         self.assertAlmostEqual(result, 12.5)
 
@@ -81,18 +88,20 @@ class TestCalculator(unittest.TestCase):
         self.assertAlmostEqual(result, 12.0)
 
     def test_calculate_sequential(self):
-        """按输入顺序计算：5 + 8.0 + 12.0 = 25.0"""
+        """按输入顺序计算：5 + 8 + 12 = 25（不是数学优先级）"""
         self.calc.input_digit('5')
         self.calc.input_operator('+')
-        self.calc.input_digit('8.0')
+        self.calc.input_digit('8')
         self.calc.input_operator('+')
-        self.calc.input_digit('12.0')
+        self.calc.input_digit('1')
+        self.calc.input_digit('2')
         result = self.calc.calculate()
         self.assertAlmostEqual(result, 25.0)
 
     def test_calculate_sequential_mixed(self):
         """10 + 3 × 2 = 26（按顺序：先 10+3=13，再 13×2=26）"""
-        self.calc.input_digit('10')
+        self.calc.input_digit('1')
+        self.calc.input_digit('0')
         self.calc.input_operator('+')
         self.calc.input_digit('3')
         self.calc.input_operator('×')
@@ -134,3 +143,7 @@ class TestCalculator(unittest.TestCase):
         self.calc.input_digit('0')
         result = self.calc.calculate()
         self.assertAlmostEqual(result, 0.0)
+
+
+if __name__ == '__main__':
+    unittest.main()
