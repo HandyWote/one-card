@@ -2,6 +2,7 @@ import unittest
 import os
 import tempfile
 import json
+import codecs
 from database import Database
 from card_manager import CardManager
 
@@ -108,7 +109,7 @@ class TestCardManager(unittest.TestCase):
         """导出文件内容应为合法 JSON"""
         self.mgr.create_card("2024001", "张三", 100.0)
         path = self.mgr.export_card("2024001", self.cards_dir)
-        with open(path, 'r') as f:
+        with open(path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         self.assertEqual(data['card_id'], "2024001")
         self.assertEqual(data['name'], "张三")
@@ -141,6 +142,51 @@ class TestCardManager(unittest.TestCase):
         self.mgr.import_card(card_file)
         db_card = self.mgr.load_card("2024001")
         self.assertEqual(db_card['balance'], 300.0)
+
+    def test_import_card_compatible_reads_gb18030(self):
+        card_file = os.path.join(self.cards_dir, "2024003")
+        card_payload = {
+            "card_id": "2024003",
+            "name": "张三",
+            "balance": 88.0,
+            "status": "active",
+            "created_at": "2026-04-02"
+        }
+        raw = json.dumps(card_payload, ensure_ascii=False, indent=2).encode('gb18030')
+        with open(card_file, 'wb') as f:
+            f.write(raw)
+
+        card, source_encoding = self.mgr.import_card_compatible(card_file)
+
+        self.assertIsNotNone(card)
+        self.assertEqual(card['card_id'], "2024003")
+        self.assertEqual(card['name'], "张三")
+        self.assertEqual(source_encoding, 'gb18030')
+
+    def test_sync_card_file_preserves_utf8_sig(self):
+        self.mgr.create_card("2024004", "李四", 100.0)
+        card_file = os.path.join(self.cards_dir, "2024004")
+        with open(card_file, 'wb') as f:
+            f.write(codecs.BOM_UTF8)
+            f.write(
+                json.dumps({
+                    "card_id": "2024004",
+                    "name": "李四",
+                    "balance": 100.0,
+                    "status": "active",
+                    "created_at": "2026-04-03"
+                }, ensure_ascii=False, indent=2).encode('utf-8')
+            )
+
+        ok, _ = self.mgr.recharge("2024004", 10.0)
+        self.assertTrue(ok)
+        self.mgr.sync_card_file(card_file, "2024004", "utf-8-sig")
+
+        with open(card_file, 'rb') as f:
+            raw = f.read()
+        self.assertTrue(raw.startswith(codecs.BOM_UTF8))
+        card_data = json.loads(raw.decode('utf-8-sig'))
+        self.assertAlmostEqual(card_data['balance'], 110.0)
 
 if __name__ == '__main__':
     unittest.main()
