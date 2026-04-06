@@ -45,6 +45,16 @@ class TerminalApp:
         tk.Label(self.root, textvariable=self.display_var,
                  font=display_font, anchor='e', padx=20, pady=15,
                  relief='sunken', width=16).pack(fill='x', padx=10, pady=(10, 5))
+        
+         # 显示区下方、结果区上方
+        tip_font = tkfont.Font(size=16)
+        tk.Label(
+            self.root,
+            text="将开卡生成的文件拖放到此窗口完成刷卡",
+            font=tip_font,
+            fg="#666666", 
+            anchor='center'
+        ).pack(fill='x', padx=10, pady=(5, 10))
 
         # 结果区
         self.result_var = tk.StringVar(value='')
