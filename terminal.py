@@ -1,7 +1,9 @@
 # terminal.py
 import tkinter as tk
-from tkinter import font as tkfont, filedialog
-import os
+from tkinter import font as tkfont
+from tkinter import filedialog
+import json
+import codecs
 
 from database import Database
 from card_manager import CardManager
@@ -17,25 +19,16 @@ STATE_WAITING = 'waiting'
 STATE_RESULT = 'result'
 
 
-def _get_font_family(root):
-    families = set(tkfont.families(root))
-    for candidate in ['Noto Sans CJK SC', 'WenQuanYi Micro Hei',
-                       'Microsoft YaHei', 'PingFang SC', 'Arial']:
-        if candidate in families:
-            return candidate
-    return 'TkDefaultFont'
-
-
 class TerminalApp:
     def __init__(self, root):
         self.root = root
         self.root.title("校园一卡通 — 消费终端")
         self.root.resizable(False, False)
-        self.font_family = _get_font_family(root)
 
         self.state = STATE_INPUT
         self.calculator = Calculator()
         self.amount = 0.0
+        self._use_file_picker = False
 
         # 初始化数据库和模块
         self.db = Database(DB_PATH)
@@ -44,27 +37,24 @@ class TerminalApp:
         self.logger = Logger(self.db)
 
         self._build_ui()
-
-        # 尝试启用拖放
-        try:
-            from tkinterdnd2 import DND_FILES
-            self.root.drop_target_register(DND_FILES)
-            self.root.dnd_bind('<<Drop>>', self._on_drop)
-        except Exception:
-            pass
+        self._setup_card_input()
+        self._set_state(STATE_INPUT)
 
     def _build_ui(self):
         # 显示区
         self.display_var = tk.StringVar(value='')
-        display_font = tkfont.Font(family=self.font_family, size=28, weight='bold')
+        display_font = tkfont.Font(size=28, weight='bold')
         tk.Label(self.root, textvariable=self.display_var,
                  font=display_font, anchor='e', padx=20, pady=15,
                  relief='sunken', width=16).pack(fill='x', padx=10, pady=(10, 5))
 
         # 结果区
         self.result_var = tk.StringVar(value='')
+        result_font_family = 'Microsoft YaHei UI'
+        if result_font_family not in tkfont.families():
+            result_font_family = 'SimHei'
         tk.Label(self.root, textvariable=self.result_var,
-                 font=(self.font_family, 12), fg='green', anchor='w', padx=10,
+                 font=(result_font_family, 12), fg='green', anchor='w', padx=10,
                  wraplength=280, height=2).pack(fill='x', padx=10)
 
         # 按键区
@@ -80,7 +70,7 @@ class TerminalApp:
 
         for text, row, col in buttons:
             btn = tk.Button(keypad, text=text, width=6, height=2,
-                            font=(self.font_family, 14))
+                            font=('Arial', 14))
             btn.grid(row=row, column=col, padx=2, pady=2)
             if text in '0123456789.':
                 btn.config(command=lambda t=text: self._on_digit(t))
@@ -93,24 +83,49 @@ class TerminalApp:
 
         # 底部两行
         tk.Button(keypad, text='清除', width=14, height=2,
-                  font=(self.font_family, 14), command=self._on_clear
+                  font=('Arial', 14), command=self._on_clear
                   ).grid(row=4, column=0, columnspan=2, padx=2, pady=2)
         tk.Button(keypad, text='确定', width=14, height=2,
-                  font=(self.font_family, 14, 'bold'),
+                  font=('Arial', 14, 'bold'),
                   command=self._on_confirm
                   ).grid(row=4, column=2, columnspan=2, padx=2, pady=2)
 
-        # 选择卡片按钮（拖放的替代/补充）
-        tk.Button(self.root, text='选择卡片', width=30, height=1,
-                  font=(self.font_family, 11),
-                  command=self._on_select_card
-                  ).pack(pady=(0, 10))
+        self.pick_card_btn = tk.Button(
+            self.root,
+            text='选择卡片',
+            font=('Arial', 12),
+            command=self._on_pick_card
+        )
+
+    def _setup_card_input(self):
+        # 尝试启用拖放，失败时回退到文件选择按钮
+        try:
+            from tkinterdnd2 import DND_FILES
+            if hasattr(self.root, 'drop_target_register') and hasattr(self.root, 'dnd_bind'):
+                self.root.drop_target_register(DND_FILES)
+                self.root.dnd_bind('<<Drop>>', self._on_drop)
+            else:
+                self._enable_file_picker()
+        except ImportError:
+            self._enable_file_picker()
+        except Exception:
+            self._enable_file_picker()
+
+    def _enable_file_picker(self):
+        self._use_file_picker = True
+        self.pick_card_btn.pack(fill='x', padx=10, pady=(0, 10))
+
+    def _set_state(self, state):
+        self.state = state
+        if self._use_file_picker:
+            picker_state = tk.NORMAL if state == STATE_WAITING else tk.DISABLED
+            self.pick_card_btn.config(state=picker_state)
 
     def _on_digit(self, digit):
         if self.state == STATE_RESULT:
             self.result_var.set('')
             self.calculator.clear()
-            self.state = STATE_INPUT
+            self._set_state(STATE_INPUT)
         if self.state in (STATE_INPUT, STATE_RESULT):
             display = self.calculator.input_digit(digit)
             self.display_var.set(display)
@@ -119,7 +134,7 @@ class TerminalApp:
         if self.state == STATE_RESULT:
             self.result_var.set('')
             self.calculator.clear()
-            self.state = STATE_INPUT
+            self._set_state(STATE_INPUT)
         if self.state == STATE_INPUT:
             display = self.calculator.input_operator(op)
             self.display_var.set(display)
@@ -133,13 +148,13 @@ class TerminalApp:
         self.calculator.clear()
         self.display_var.set('')
         self.result_var.set('')
-        self.state = STATE_INPUT
+        self._set_state(STATE_INPUT)
 
     def _on_confirm(self):
         if self.state == STATE_RESULT:
             self.result_var.set('')
             self.calculator.clear()
-            self.state = STATE_INPUT
+            self._set_state(STATE_INPUT)
             return
         if self.state != STATE_INPUT:
             return
@@ -148,11 +163,18 @@ class TerminalApp:
             self.result_var.set('请先输入金额')
             return
         self.display_var.set(f'¥ {self.amount:.2f}  请刷卡')
-        self.state = STATE_WAITING
+        self._set_state(STATE_WAITING)
 
-    def _on_select_card(self):
+    def _on_drop(self, event):
         if self.state != STATE_WAITING:
-            self.result_var.set('请先输入金额并点击"确定"')
+            return
+        paths = self.root.tk.splitlist(event.data)
+        if not paths:
+            return
+        self._process_card(paths[0])
+
+    def _on_pick_card(self):
+        if self.state != STATE_WAITING:
             return
         filepath = filedialog.askopenfilename(
             title='选择卡片文件',
@@ -161,24 +183,18 @@ class TerminalApp:
         if filepath:
             self._process_card(filepath)
 
-    def _on_drop(self, event):
-        if self.state != STATE_WAITING:
-            return
-        filepath = event.data.strip('{}')
-        self._process_card(filepath)
-
     def _process_card(self, filepath):
         try:
-            card_data = self.card_mgr.import_card(filepath)
+            card_data, source_encoding = self._import_card_compatible(filepath)
             if card_data is None:
                 self.result_var.set('卡片文件无效')
-                self.state = STATE_RESULT
+                self._set_state(STATE_RESULT)
                 return
             card_id = card_data['card_id']
             card = self.card_mgr.load_card(card_id)
             if card is None:
                 self.result_var.set('卡片不存在')
-                self.state = STATE_RESULT
+                self._set_state(STATE_RESULT)
                 return
 
             # 执行扣款
@@ -189,24 +205,87 @@ class TerminalApp:
                     card_id, 'consume', self.amount,
                     card['balance'], MERCHANT
                 )
-                self.card_mgr.export_card(card_id, CARDS_DIR)
+                self._sync_card_file(filepath, card_id, source_encoding)
+                self.display_var.set(f'¥ {card["balance"]:.2f} 元')
                 self.result_var.set(
                     f"扣款成功，{card['name']}，扣款 ¥{self.amount:.2f} 元，"
                     f"余额 ¥{card['balance']:.2f} 元"
                 )
             else:
                 self.result_var.set(f"扣款失败：{msg}")
-            self.state = STATE_RESULT
+            self._set_state(STATE_RESULT)
         except Exception as e:
             self.result_var.set(f'错误：{e}')
-            self.state = STATE_RESULT
+            self._set_state(STATE_RESULT)
+
+    def _import_card_compatible(self, filepath):
+        card_data, source_encoding = self._read_card_file_compatible(filepath)
+        if card_data is None:
+            return None, None
+        name = card_data.get('name')
+        if isinstance(name, str):
+            card_data['name'] = self._fix_mojibake_name(name)
+        self.card_mgr.save_card(card_data)
+        return self.card_mgr.load_card(card_data['card_id']), source_encoding
+
+    def _read_card_file_compatible(self, filepath):
+        # 兼容 utf-8 / utf-8-sig / gb18030，并返回原始编码以便回写保持一致
+        try:
+            with open(filepath, 'rb') as f:
+                raw = f.read()
+        except OSError:
+            return None, None
+
+        candidates = []
+        if raw.startswith(codecs.BOM_UTF8):
+            candidates.append('utf-8-sig')
+        else:
+            candidates.append('utf-8')
+        candidates.append('gb18030')
+
+        for encoding in candidates:
+            try:
+                text = raw.decode(encoding)
+                card_data = json.loads(text)
+                if not isinstance(card_data, dict):
+                    return None, None
+                required = ('card_id', 'name', 'balance', 'status', 'created_at')
+                if not all(k in card_data for k in required):
+                    return None, None
+                return card_data, encoding
+            except (UnicodeDecodeError, json.JSONDecodeError):
+                continue
+        return None, None
+
+    def _fix_mojibake_name(self, name):
+        # 例：'寮犱笁' -> '张三'
+        for wrong_enc in ('gbk', 'latin1'):
+            try:
+                fixed = name.encode(wrong_enc).decode('utf-8')
+                if fixed:
+                    return fixed
+            except UnicodeError:
+                continue
+        return name
+
+    def _sync_card_file(self, filepath, card_id, source_encoding):
+        card = self.card_mgr.load_card(card_id)
+        if card is None:
+            return
+        encoding = source_encoding or 'utf-8'
+        with open(filepath, 'w', encoding=encoding) as f:
+            json.dump(card, f, ensure_ascii=False, indent=2)
 
     def cleanup(self):
         self.db.close()
 
 
 def main():
-    root = tk.Tk()
+    try:
+        from tkinterdnd2 import TkinterDnD
+        root = TkinterDnD.Tk()
+    except ImportError:
+        root = tk.Tk()
     app = TerminalApp(root)
     root.protocol("WM_DELETE_WINDOW", lambda: (app.cleanup(), root.destroy()))
     root.mainloop()
