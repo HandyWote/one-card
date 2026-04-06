@@ -163,7 +163,7 @@ class IssuerApp:
 
     def _process_recharge(self, filepath):
         try:
-            card_data = self.card_mgr.import_card(filepath)
+            card_data, source_encoding = self.card_mgr.import_card_compatible(filepath)
             if card_data is None:
                 self.recharge_status.set('卡片文件无效')
                 return
@@ -181,7 +181,7 @@ class IssuerApp:
                     card_id, 'recharge', self.recharge_amount,
                     card['balance'], MERCHANT
                 )
-                self.card_mgr.export_card(card_id, CARDS_DIR)
+                self.card_mgr.sync_card_file(filepath, card_id, source_encoding)
                 self.recharge_status.set(
                     f"充值成功！{card['name']}，充值 ¥{self.recharge_amount:.2f} 元，"
                     f"余额 ¥{card['balance']:.2f} 元"
