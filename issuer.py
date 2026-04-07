@@ -26,7 +26,7 @@ def _get_font_family(root):
 class IssuerApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("校园一卡通 — 充值发卡站")
+        self.root.title("发卡端")
         self.root.resizable(False, False)
         self.font_family = _get_font_family(root)
 
